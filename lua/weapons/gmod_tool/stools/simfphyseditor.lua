@@ -13,16 +13,15 @@ TOOL.ClientConVar[ "maxrpm" ] = 6200
 TOOL.ClientConVar[ "powerbandstart" ] = 2000
 TOOL.ClientConVar[ "powerbandend" ] = 6000
 TOOL.ClientConVar[ "maxtorque" ] = 280
-TOOL.ClientConVar[ "turbocharged" ] = 0
-TOOL.ClientConVar[ "supercharged" ] = 0
-TOOL.ClientConVar[ "revlimiter" ] = 0
+TOOL.ClientConVar[ "turbocharged" ] = "0"
+TOOL.ClientConVar[ "supercharged" ] = "0"
+TOOL.ClientConVar[ "revlimiter" ] = "0"
 TOOL.ClientConVar[ "diffgear" ] = 0.65
 TOOL.ClientConVar[ "traction" ] = 43
 TOOL.ClientConVar[ "tractionbias" ] = -0.02
 TOOL.ClientConVar[ "brakepower" ] = 45
 TOOL.ClientConVar[ "powerdistribution" ] = 1
 TOOL.ClientConVar[ "efficiency" ] = 1.25
-TOOL.ClientConVar[ "hornsound" ] = ""
 
 if CLIENT then
 	language.Add( "tool.simfphyseditor.name", "simfphys vehicle editor" )
@@ -51,22 +50,10 @@ if CLIENT then
 	
 end
 
-local function IsValidSound( sound )
-	local soundlist = list.Get( "SimfphysHornSounds" )
-	for snd, _ in pairs( soundlist ) do
-		if (soundlist[snd].simfphyseditor_hornsound:lower() == sound:lower() ) then return true end
-	end
-	return false
-end
-
 function TOOL:LeftClick( trace )
 	local ent = trace.Entity
 	
-	if (!IsValid(ent)) then return false end
-	
-	local IsVehicle = ent:GetClass() == "gmod_sent_vehicle_fphysics_base"
-	
-	if (!IsVehicle) then return false end
+	if not simfphys.IsCar( ent ) then return false end
 	
 	ent:SetSteerSpeed( tonumber( self:GetClientInfo( "steerspeed" ) ) )
 	ent:SetFastSteerConeFadeSpeed( tonumber( self:GetClientInfo( "fadespeed" ) ) )
@@ -81,15 +68,11 @@ function TOOL:LeftClick( trace )
 	ent:SetSuperCharged( self:GetClientInfo( "supercharged" ) == "1")
 	ent:SetRevlimiter( self:GetClientInfo( "revlimiter" ) == "1")
 	ent:SetDifferentialGear( tonumber( self:GetClientInfo( "diffgear" ) ) )
-	ent:SetMaxTraction( tonumber( self:GetClientInfo( "traction" ) ) )
-	ent:SetTractionBias( tonumber( self:GetClientInfo( "tractionbias" ) ) )
+	ent:SetMaxTraction( math.max( tonumber( self:GetClientInfo( "traction" ) ) , 5) )
+	ent:SetTractionBias( math.Clamp(tonumber( self:GetClientInfo( "tractionbias" ) ),-0.99,0.99) )
 	ent:SetBrakePower( tonumber( self:GetClientInfo( "brakepower" ) ) )
-	ent:SetPowerDistribution( tonumber( self:GetClientInfo( "powerdistribution" ) ) )
+	ent:SetPowerDistribution( math.Clamp(tonumber( self:GetClientInfo( "powerdistribution" ) ) ,-1,1) )
 	ent:SetEfficiency( tonumber( self:GetClientInfo( "efficiency" ) ) )
-	
-	if (IsValidSound( self:GetClientInfo("hornsound") )) then
-		ent.snd_horn = self:GetClientInfo("hornsound")
-	end
 	
 	return true
 end
@@ -98,11 +81,7 @@ function TOOL:RightClick( trace )
 	local ent = trace.Entity
 	local ply = self:GetOwner()
 	
-	if (!IsValid(ent)) then return false end
-	
-	local IsVehicle = ent:GetClass() == "gmod_sent_vehicle_fphysics_base"
-	
-	if (!IsVehicle) then return false end
+	if not simfphys.IsCar( ent ) then return false end
 	
 	ply:ConCommand( "simfphyseditor_steerspeed " ..ent:GetSteerSpeed() )
 	ply:ConCommand( "simfphyseditor_fadespeed " ..ent:GetFastSteerConeFadeSpeed() )
@@ -130,11 +109,7 @@ function TOOL:Reload( trace )
 	local ent = trace.Entity
 	local ply = self:GetOwner()
 	
-	if (!IsValid(ent)) then return false end
-	
-	local IsVehicle = ent:GetClass() == "gmod_sent_vehicle_fphysics_base"
-	
-	if (!IsVehicle) then return false end
+	if not simfphys.IsCar( ent ) then return false end
 	
 	if (SERVER) then
 		local vname = ent:GetSpawn_List()
@@ -322,16 +297,4 @@ function TOOL.BuildCPanel( panel )
 		Command = "simfphyseditor_efficiency",
 		Help = true
 	})
-	panel:AddControl( "Label",  { Text = "" } )
-	panel:AddControl( "Label",  { Text = "--- misc ---" } )
-	panel:AddControl( "ListBox", { Label = "Hornsound", Options = list.Get( "SimfphysHornSounds" ) } )
 end
-
-list.Set( "SimfphysHornSounds", "out of my way", { simfphyseditor_hornsound = "simulated_vehicles/horn_0.wav" } )
-list.Set( "SimfphysHornSounds", "vote for daniels", { simfphyseditor_hornsound = "simulated_vehicles/horn_6.wav" } )
-list.Set( "SimfphysHornSounds", "Horn 1", { simfphyseditor_hornsound = "simulated_vehicles/horn_1.wav" } )
-list.Set( "SimfphysHornSounds", "Horn 2", { simfphyseditor_hornsound = "simulated_vehicles/horn_2.wav" } )
-list.Set( "SimfphysHornSounds", "Horn 4", { simfphyseditor_hornsound = "simulated_vehicles/horn_4.wav" } )
-list.Set( "SimfphysHornSounds", "Horn 3", { simfphyseditor_hornsound = "simulated_vehicles/horn_3.wav" } )
-list.Set( "SimfphysHornSounds", "Horn 5", { simfphyseditor_hornsound = "simulated_vehicles/horn_5.wav" } )
-list.Set( "SimfphysHornSounds", "Horn 6", { simfphyseditor_hornsound = "simulated_vehicles/horn_7.wav" } )

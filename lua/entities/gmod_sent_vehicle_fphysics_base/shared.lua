@@ -9,7 +9,7 @@ ENT.Spawnable       = false
 ENT.AdminSpawnable  = false
 
 ENT.AutomaticFrameAdvance = true
-ENT.RenderGroup = RENDERGROUP_BOTH
+ENT.RenderGroup = RENDERGROUP_BOTH 
 ENT.Editable = (GetConVar("sv_simfphys_devmode"):GetInt() or 1) >= 1
 ENT.IsSimfphyscar = true
 
@@ -37,8 +37,8 @@ function ENT:SetupDataTables()
 	
 	self:NetworkVar( "Float",8, "BrakePower",				{ KeyName = "brakepower",			Edit = { type = "Float",		order = 18,min = 0.1, max = 500,	category = "Wheels"} } )
 	self:NetworkVar( "Float",9, "PowerDistribution",			{ KeyName = "powerdistribution",		Edit = { type = "Float",		order = 19,min = -1, max = 1,		category = "Wheels"} } )
-	self:NetworkVar( "Float",10, "Efficiency",				{ KeyName = "efficiency",				Edit = { type = "Float",		order = 20,min = 0.2, max = 2,		category = "Wheels"} } )
-	self:NetworkVar( "Float",11, "MaxTraction",				{ KeyName = "maxtraction",			Edit = { type = "Float",		order = 21,min = 5, max = 500,		category = "Wheels"} } )
+	self:NetworkVar( "Float",10, "Efficiency",				{ KeyName = "efficiency",				Edit = { type = "Float",		order = 20,min = 0.2, max = 4,		category = "Wheels"} } )
+	self:NetworkVar( "Float",11, "MaxTraction",				{ KeyName = "maxtraction",			Edit = { type = "Float",		order = 21,min = 5, max = 1000,	category = "Wheels"} } )
 	self:NetworkVar( "Float",12, "TractionBias",				{ KeyName = "tractionbias",			Edit = { type = "Float",		order = 22,min = -0.99, max = 0.99,	category = "Wheels"} } )
 	self:NetworkVar( "Bool",17, "BulletProofTires",			{ KeyName = "bulletprooftires",			Edit = { type = "Boolean",		order = 23,					category = "Wheels"} } )
 	self:NetworkVar( "Vector",0, "TireSmokeColor",			{ KeyName = "tiresmokecolor",			Edit = { type = "VectorColor",	order = 24,					category = "Wheels"} } )
@@ -54,21 +54,19 @@ function ENT:SetupDataTables()
 	self:NetworkVar( "Bool",12, "EMSEnabled" )
 	self:NetworkVar( "Bool",11, "FogLightsEnabled" )
 	self:NetworkVar( "Bool",16, "HandBrakeEnabled" )
-	self:NetworkVar( "Float",27, "MousePos" )
-	self:NetworkVar( "Float",28, "DeadZone" )
-	self:NetworkVar( "Float",29, "ctPos" )
 	
 	self:NetworkVar( "Float",15, "VehicleSteer" )
 	self:NetworkVar( "Entity",0, "Driver" )
 	self:NetworkVar( "Entity",1, "DriverSeat" )
 	self:NetworkVar( "Bool",3, "Active" )
-	self:NetworkVar( "Bool",13, "Freelook" )
 	
 	self:NetworkVar( "String",1, "Spawn_List")
 	self:NetworkVar( "String",2, "Lights_List")
 	self:NetworkVar( "String",3, "Soundoverride")
+	
+	self:NetworkVar( "Vector",1, "FuelPortPosition" )
 
-	if ( SERVER ) then
+	if SERVER then
 		self:NetworkVarNotify( "FrontSuspensionHeight", self.OnFrontSuspensionHeightChanged )
 		self:NetworkVarNotify( "RearSuspensionHeight", self.OnRearSuspensionHeightChanged )
 		self:NetworkVarNotify( "TurboCharged", self.OnTurboCharged )
@@ -84,27 +82,60 @@ end
 
 local VehicleMeta = FindMetaTable("Entity")
 local OldIsVehicle = VehicleMeta.IsVehicle
-
 function VehicleMeta:IsVehicle()
 	return self.IsSimfphyscar and self:IsSimfphyscar() or OldIsVehicle(self)
 end
 
 function ENT:GetCurHealth()
-	return self:GetNWFloat( "Health", 0 )
+	return self:GetNWFloat( "Health", self:GetMaxHealth() )
 end
 
 function ENT:GetMaxHealth()
-	return self:GetNWFloat( "MaxHealth", 0 )
+	return self:GetNWFloat( "MaxHealth", 2000 )
 end
 
-if SERVER then
+function ENT:GetMaxFuel()
+	return self:GetNWFloat( "MaxFuel", 60 )
+end
 
-	function ENT:SetMaxHealth( nHealth )
-		self:SetNWFloat( "MaxHealth", nHealth )
+function ENT:GetFuel()
+	return self:GetNWFloat( "Fuel", self:GetMaxFuel() )
+end
+
+function ENT:GetFuelUse()
+	return self:GetNWFloat( "FuelUse", 0 )
+end
+
+function ENT:GetFuelType()
+	return self:GetNWInt( "FuelType", 1 )
+end
+
+function ENT:GetFuelPos()
+	return self:LocalToWorld( self:GetFuelPortPosition() )
+end
+
+function ENT:OnSmoke()
+	return self:GetNWBool( "OnSmoke", false )
+end
+
+function ENT:OnFire()
+	return self:GetNWBool( "OnFire", false )
+end
+
+function ENT:GetBackfireSound()
+	return self:GetNWString( "backfiresound" )
+end
+
+function ENT:SetBackfireSound( the_sound )
+	self:SetNWString( "backfiresound", the_sound ) 
+end
+
+function ENT:BodyGroupIsValid( bodygroups )
+	for index, groups in pairs( bodygroups ) do
+		local mygroup = self:GetBodygroup( index )
+		for g_index = 1, table.Count( groups ) do
+			if mygroup == groups[g_index] then return true end
+		end
 	end
-
-	function ENT:SetCurHealth( nHealth )
-		self:SetNWFloat( "Health", nHealth )
-	end
-
+	return false
 end

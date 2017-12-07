@@ -2,20 +2,6 @@ util.AddNetworkString( "simfphys_spritedamage" )
 util.AddNetworkString( "simfphys_lightsfixall" )
 util.AddNetworkString( "simfphys_backfire" )
 
-local DamageEnabled = false
-cvars.AddChangeCallback( "sv_simfphys_enabledamage", function( convar, oldValue, newValue )
-	DamageEnabled = ( tonumber( newValue )~=0 )
-end)
-DamageEnabled = GetConVar( "sv_simfphys_enabledamage" ):GetBool()
-
-local function SetEntOwner( ply , entity )
-	if CPPI then
-		if IsValid( ply ) then
-			entity:CPPISetOwner( ply )
-		end
-	end
-end
-
 local function Spark( pos , normal , snd )
 	local effectdata = EffectData()
 	effectdata:SetOrigin( pos - normal )
@@ -34,12 +20,17 @@ local function BloodEffect( pos )
 end
 
 local function DestroyVehicle( ent )
-	if !IsValid( ent ) then return end
+	if not IsValid( ent ) then return end
 	if ent.destroyed then return end
 	
 	ent.destroyed = true
 	
 	local ply = ent.EntityOwner
+	local skin = ent:GetSkin()
+	local Col = ent:GetColor()
+	Col.r = Col.r * 0.8
+	Col.g = Col.g * 0.8
+	Col.b = Col.b * 0.8
 	
 	local bprop = ents.Create( "gmod_sent_vehicle_fphysics_gib" )
 	bprop:SetModel( ent:GetModel() )			
@@ -51,7 +42,10 @@ local function DestroyVehicle( ent )
 	bprop:GetPhysicsObject():SetMass( ent.Mass * 0.75 )
 	bprop.DoNotDuplicate = true
 	bprop.MakeSound = true
-	SetEntOwner( ply , bprop )
+	bprop:SetColor( Col )
+	bprop:SetSkin( skin )
+	
+	simfphys.SetOwner( ply , bprop )
 	
 	if IsValid( ply ) then
 		undo.Create( "Gib" )
@@ -78,19 +72,22 @@ local function DestroyVehicle( ent )
 				prop.DoNotDuplicate = true
 				bprop:DeleteOnRemove( prop )
 				
-				SetEntOwner( ply , prop )
+				simfphys.SetOwner( ply , prop )
 			end
 		end
 	end
 	
-	if IsValid(ent:GetDriver()) then
-		ent:GetDriver():Kill()
+	local Driver = ent:GetDriver()
+	if IsValid( Driver ) then
+		if ent.RemoteDriver ~= Driver then
+			Driver:Kill()
+		end
 	end
 	
 	if ent.PassengerSeats then
 		for i = 1, table.Count( ent.PassengerSeats ) do
 			local Passenger = ent.pSeat[i]:GetDriver()
-			if IsValid(Passenger) then
+			if IsValid( Passenger ) then
 				Passenger:Kill()
 			end
 		end
@@ -100,12 +97,11 @@ local function DestroyVehicle( ent )
 	ent:Remove()
 end
 
-local function DamageVehicle( ent , damage )
-	if not DamageEnabled then return end
+local function DamageVehicle( ent , damage, type )
+	if not simfphys.DamageEnabled then return end
 	
 	local MaxHealth = ent:GetMaxHealth()
 	local CurHealth = ent:GetCurHealth()
-	if CurHealth <= 0 then return end
 	
 	local NewHealth = math.max( math.Round(CurHealth - damage,0) , 0 )
 	
@@ -118,16 +114,39 @@ local function DamageVehicle( ent , damage )
 		end
 	end
 	
-	if NewHealth <= 0 then DestroyVehicle( ent ) return end
+	if MaxHealth > 30 and NewHealth <= 31 then
+		if ent:EngineActive() then
+			ent:DamagedStall()
+		end
+	end
+	
+	if NewHealth <= 0 then
+		if type ~= DMG_GENERIC and type ~= DMG_CRUSH or damage > 400 then
+			
+			DestroyVehicle( ent )
+			
+			return
+		end
+		
+		if ent:EngineActive() then
+			ent:DamagedStall()
+		end
+		
+		return
+	end
 	
 	ent:SetCurHealth( NewHealth )
 end
 
 local function HurtPlayers( ent, damage )
+	if not simfphys.pDamageEnabled then return end
+	
 	local Driver = ent:GetDriver()
 	
-	if IsValid(Driver) then
-		Driver:TakeDamage(damage, Entity(0), ent )
+	if IsValid( Driver ) then
+		if ent.RemoteDriver ~= Driver then
+			Driver:TakeDamage(damage, Entity(0), ent )
+		end
 	end
 	
 	if ent.PassengerSeats then
@@ -142,7 +161,7 @@ local function HurtPlayers( ent, damage )
 end
 
 local function bcDamage( vehicle , position , cdamage )
-	if !DamageEnabled then return end
+	if not simfphys.DamageEnabled then return end
 	
 	cdamage = cdamage or false
 	net.Start( "simfphys_spritedamage" )
@@ -153,6 +172,13 @@ local function bcDamage( vehicle , position , cdamage )
 end
 
 local function onCollide( ent, data )
+	if IsValid( data.HitEntity ) then
+		if data.HitEntity:GetClass():StartWith( "npc_" ) then
+			Spark( data.HitPos , data.HitNormal , "MetalVehicle.ImpactSoft" )
+			return
+		end
+	end
+	
 	if ( data.Speed > 60 && data.DeltaTime > 0.2 ) then
 		
 		local pos = data.HitPos
@@ -162,22 +188,26 @@ local function onCollide( ent, data )
 			
 			HurtPlayers( ent , 5 )
 			
-			ent:TakeDamage(data.Speed / 7, Entity(0), Entity(0) )
+			ent:TakeDamage( (data.Speed / 7) * simfphys.DamageMul, Entity(0), Entity(0) )
 			
 			bcDamage( ent , ent:WorldToLocal( pos ) , true )
 		else
 			Spark( pos , data.HitNormal , "MetalVehicle.ImpactSoft" )
 			
-			if (data.Speed > 250) then
+			if data.Speed > 250 then
 				local hitent = data.HitEntity:IsPlayer()
-				if !hitent then
+				if not hitent then
 					bcDamage( ent , ent:WorldToLocal( pos ) , true )
+					
+					if simfphys.DamageMul > 1 then
+						ent:TakeDamage( (data.Speed / 28) * simfphys.DamageMul, Entity(0), Entity(0) )
+					end
 				end
 			end
 			
-			if (data.Speed > 500) then
+			if data.Speed > 500 then
 				HurtPlayers( ent , 2 )
-				ent:TakeDamage(data.Speed / 14, Entity(0), Entity(0) )
+				ent:TakeDamage( (data.Speed / 14) * simfphys.DamageMul, Entity(0), Entity(0) )
 			end
 		end
 	end
@@ -186,13 +216,12 @@ end
 local function OnDamage( ent, dmginfo )
 	ent:TakePhysicsDamage( dmginfo )
 	
-	if (ent.EnableSuspension != 1) then return end
+	if not ent:IsInitialized() then return end
 	
 	local Damage = dmginfo:GetDamage() 
 	local DamagePos = dmginfo:GetDamagePosition() 
 	local Type = dmginfo:GetDamageType()
 	local Driver = ent:GetDriver()
-	
 	bcDamage( ent , ent:WorldToLocal( DamagePos ) )
 	
 	local Mul = 1
@@ -204,7 +233,9 @@ local function OnDamage( ent, dmginfo )
 		Mul = 2
 	end
 	
-	DamageVehicle( ent , Damage * Mul )
+	DamageVehicle( ent , Damage * Mul, Type )
+	
+	if ent.IsArmored then return end
 	
 	if IsValid(Driver) then
 		local Distance = (DamagePos - Driver:GetPos()):Length() 
@@ -234,9 +265,9 @@ local function OnDamage( ent, dmginfo )
 end
 
 hook.Add( "OnEntityCreated", "simfphys_damagestuff", function( ent )
-	if ent:GetClass() == "gmod_sent_vehicle_fphysics_base" then
+	if simfphys.IsCar( ent ) then
 		timer.Simple( 0.2, function()
-			if !IsValid(ent) then return end
+			if not IsValid( ent ) then return end
 			
 			local Health = math.floor(ent.MaxHealth and ent.MaxHealth or (1000 + ent:GetPhysicsObject():GetMass() / 3))
 			

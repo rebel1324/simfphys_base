@@ -48,6 +48,8 @@ local V = {
 		PowerbandStart = 2200,
 		PowerbandEnd = 6300,
 		
+		FuelFillPos = Vector(17.64,-14.55,30.06),
+		
 		PowerBias = 0.5,
 		
 		EngineSoundPreset = -1,
@@ -82,7 +84,6 @@ local V = {
 		Sound_Throttle = "",
 		Sound_ThrottlePitch = 0,
 		Sound_ThrottleVolume = 0,
-		--
 		
 		snd_horn = "simulated_vehicles/horn_1.wav", 
 		
@@ -140,6 +141,8 @@ local V = {
 		PowerbandEnd = 5800,
 		Turbocharged = false,
 		Supercharged = false,
+		
+		FuelFillPos = Vector(32.82,-78.31,81.89),
 		
 		PowerBias = 0,
 		
@@ -228,6 +231,9 @@ local V = {
 		PowerbandEnd = 5800,
 		Turbocharged = false,
 		Supercharged = false,
+		
+		FuelFillPos = Vector(-39.07,-108.1,60.81),
+		FuelTankSize = 80,
 		
 		PowerBias = 1,
 		
@@ -337,6 +343,9 @@ local V = {
 		Turbocharged = false,
 		Supercharged = false,
 		DoNotStall = true,
+		
+		FuelType = FUELTYPE_ELECTRIC,
+		FuelTankSize = 80,
 		
 		PowerBias = 0,
 		
@@ -526,6 +535,10 @@ local V = {
 		PowerbandEnd = 4500,
 		Turbocharged = false,
 		Supercharged = false,
+		
+		FuelFillPos = Vector(-61.39,49.54,15.79),
+		FuelType = FUELTYPE_DIESEL,
+		FuelTankSize = 120,
 		
 		PowerBias = 0,
 		

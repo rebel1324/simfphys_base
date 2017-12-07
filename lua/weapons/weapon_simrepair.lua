@@ -1,3 +1,5 @@
+AddCSLuaFile()
+
 SWEP.Category			= "simfphys"
 SWEP.Spawnable			= true
 SWEP.AdminSpawnable		= false
@@ -35,7 +37,7 @@ if (CLIENT) then
 end
 
 function SWEP:Initialize()
-	self:SetWeaponHoldType( self.HoldType )
+	self.Weapon:SetHoldType( self.HoldType )
 end
 
 function SWEP:OwnerChanged()

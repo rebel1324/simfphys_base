@@ -1,3 +1,9 @@
+local LockedPitch = 5
+if CLIENT then
+	cvars.AddChangeCallback( "cl_simfphys_ms_lockedpitch", function( convar, oldValue, newValue ) LockedPitch = tonumber( newValue ) end)
+	LockedPitch = GetConVar( "cl_simfphys_ms_lockedpitch" ):GetFloat()
+end
+
 
 local function simfphyslerpView( ply, view )
 	
@@ -6,7 +12,7 @@ local function simfphyslerpView( ply, view )
 	
 	if ply:InVehicle() then
 		if ply.simfphys_smooth_in < 0.999 then
-			ply.simfphys_smooth_in = ply.simfphys_smooth_in + (1 - ply.simfphys_smooth_in) * FrameTime() * 3
+			ply.simfphys_smooth_in = ply.simfphys_smooth_in + (1 - ply.simfphys_smooth_in) * FrameTime() * 5
 			
 			view.origin = LerpVector(ply.simfphys_smooth_in, ply.simfphys_eyepos_in, view.origin )
 			view.angles = LerpAngle(ply.simfphys_smooth_in, ply.simfphys_eyeang_in, view.angles )
@@ -19,7 +25,7 @@ local function simfphyslerpView( ply, view )
 		end
 	else
 		if ply.simfphys_smooth_out < 0.999 then
-			ply.simfphys_smooth_out = ply.simfphys_smooth_out + (1 - ply.simfphys_smooth_out) * FrameTime() * 3
+			ply.simfphys_smooth_out = ply.simfphys_smooth_out + (1 - ply.simfphys_smooth_out) * FrameTime() * 5
 			
 			view.origin = LerpVector(ply.simfphys_smooth_out, ply.simfphys_eyepos_out, ply:GetShootPos() )
 			view.angles = LerpAngle(ply.simfphys_smooth_out, ply.simfphys_eyeang_out, ply:EyeAngles() )
@@ -33,7 +39,7 @@ local function simfphyslerpView( ply, view )
 end
 
 hook.Add( "CalcView", "simfphys_camtransitionshit", function( ply, pos, angles, fov )
-	if !ply:InVehicle() then
+	if not ply:InVehicle() then
 		ply.simfphys_smooth_in = 0
 		ply.simfphys_smooth_out = ply.simfphys_smooth_out or 1
 		
@@ -53,22 +59,44 @@ hook.Add( "CalcView", "simfphys_camtransitionshit", function( ply, pos, angles, 
 	end
 end)
 
+local function GetViewOverride( vehicle )
+	if not IsValid( vehicle ) then return Vector(0,0,0) end
+	
+	if not vehicle.customview then
+		local vehiclelist = list.Get( "simfphys_vehicles" )[ vehicle.vehiclebase:GetSpawn_List() ]
+		
+		if vehiclelist then
+			vehicle.customview = vehiclelist.Members.FirstPersonViewPos or Vector(0,-9,5)
+		else
+			vehicle.customview = Vector(0,-9,5)
+		end
+	end
+	
+	return vehicle.customview
+end
+
 hook.Add("CalcVehicleView", "simfphysViewOverride", function(Vehicle, ply, view)
 
 	local vehiclebase = Vehicle.vehiclebase
 	
-	if !IsValid(vehiclebase) then return end
+	if not IsValid(vehiclebase) then return end
 
 	local IsDriverSeat = Vehicle == vehiclebase:GetDriverSeat()
 	
-	if ( Vehicle.GetThirdPersonMode == nil || ply:GetViewEntity() != ply ) then
+	if Vehicle.GetThirdPersonMode == nil or ply:GetViewEntity() ~= ply  then
 		return
 	end
 	
 	ply.simfphys_smooth_out = 0
 	
-	if ( !Vehicle:GetThirdPersonMode() ) then
-		view.origin = IsDriverSeat and view.origin + Vehicle:GetUp() * 5 - Vehicle:GetRight() * 9 or view.origin + Vehicle:GetUp() * 5
+	if not Vehicle:GetThirdPersonMode() then
+		local viewoverride = GetViewOverride( Vehicle )
+		
+		local X = viewoverride.X
+		local Y = viewoverride.Y
+		local Z = viewoverride.Z
+		
+		view.origin = IsDriverSeat and view.origin + Vehicle:GetForward() * X + Vehicle:GetRight() * Y + Vehicle:GetUp() * Z or view.origin + Vehicle:GetUp() * 5
 		
 		return simfphyslerpView( ply, view )
 	end
@@ -84,8 +112,9 @@ hook.Add("CalcVehicleView", "simfphysViewOverride", function(Vehicle, ply, view)
 		start = view.origin,
 		endpos = TargetOrigin,
 		filter = function( e )
-			local c = e:GetClass() -- Avoid contact with entities that can potentially be attached to the vehicle. Ideally, we should check if "e" is constrained to "Vehicle".
-			return !c:StartWith( "prop_physics" ) &&!c:StartWith( "prop_dynamic" ) && !c:StartWith( "prop_ragdoll" ) && !e:IsVehicle() && !c:StartWith( "gmod_" ) && !c:StartWith( "player" )
+			local c = e:GetClass()
+			local collide = not c:StartWith( "prop_physics" ) and not c:StartWith( "prop_dynamic" ) and not c:StartWith( "prop_ragdoll" ) and not e:IsVehicle() and not c:StartWith( "gmod_" ) and not c:StartWith( "player" )
+			return collide
 		end,
 		mins = Vector( -WallOffset, -WallOffset, -WallOffset ),
 		maxs = Vector( WallOffset, WallOffset, WallOffset ),
@@ -94,7 +123,7 @@ hook.Add("CalcVehicleView", "simfphysViewOverride", function(Vehicle, ply, view)
 	view.origin = tr.HitPos
 	view.drawviewer = true
 
-	if ( tr.Hit && !tr.StartSolid) then
+	if tr.Hit and not tr.StartSolid then
 		view.origin = view.origin + tr.HitNormal * WallOffset
 	end
 	
@@ -103,20 +132,20 @@ end)
 
 hook.Add("StartCommand", "simfphys_lockview", function(ply, ucmd)
 	local vehicle = ply:GetVehicle()
-	if (!IsValid(vehicle)) then return end
+	if not IsValid(vehicle) then return end
 	
 	local vehiclebase = vehicle.vehiclebase
 	
-	if (!IsValid(vehiclebase)) then return end
+	if not IsValid(vehiclebase) then return end
 
 	local IsDriverSeat = vehicle == vehiclebase:GetDriverSeat()
 	
-	if (!IsDriverSeat) then return end
-	if !(ply:GetInfoNum( "cl_simfphys_mousesteer", 0 ) == 1) then return end
+	if not IsDriverSeat then return end
+	if not (ply:GetInfoNum( "cl_simfphys_mousesteer", 0 ) == 1) then return end
 	
 	local ang = ucmd:GetViewAngles()
 	
-	if (vehiclebase:GetFreelook()) then
+	if ply.Freelook then
 		vehicle.lockedpitch = ang.p
 		vehicle.lockedyaw = ang.y
 		return
@@ -126,24 +155,24 @@ hook.Add("StartCommand", "simfphys_lockview", function(ply, ucmd)
 	vehicle.lockedyaw = vehicle.lockedyaw or 90
 	
 	local dir = 0
-	if (vehicle.lockedyaw < 90 and vehicle.lockedyaw > -90) then
+	if vehicle.lockedyaw < 90 and vehicle.lockedyaw > -90 then
 		dir = math.abs(vehicle.lockedyaw - 90)
 	end
-	if (vehicle.lockedyaw >= 90) then
+	if vehicle.lockedyaw >= 90 then
 		dir = -math.abs(vehicle.lockedyaw - 90)
 	end
-	if (vehicle.lockedyaw < -90 and vehicle.lockedyaw >= -270) then
+	if vehicle.lockedyaw < -90 and vehicle.lockedyaw >= -270 then
 		dir = -math.abs(vehicle.lockedyaw + 270)
 	end
 	
 	vehicle.lockedyaw = vehicle.lockedyaw + dir * 0.05
-	vehicle.lockedpitch = vehicle.lockedpitch + (5 - vehicle.lockedpitch) * 0.05
+	vehicle.lockedpitch = vehicle.lockedpitch + (LockedPitch - vehicle.lockedpitch) * 0.05
 	
-	if (ply:GetInfoNum( "cl_simfphys_ms_lockpitch", 0 ) == 1) then
+	if ply:GetInfoNum( "cl_simfphys_ms_lockpitch", 0 ) == 1 then
 		ang.p = vehicle.lockedpitch
 	end
 	
 	ang.y = vehicle.lockedyaw
 	
-	ucmd:SetViewAngles(ang)
+	ucmd:SetViewAngles( ang )
 end)
